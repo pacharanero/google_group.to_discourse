@@ -1,3 +1,5 @@
+env.sh
+discourse/
 *.gem
 *.rbc
 /.config
