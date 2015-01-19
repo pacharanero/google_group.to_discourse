@@ -1,5 +1,5 @@
 def go
-	root_group_page = ""
+	root_group_page = "https://groups.google.com/forum/#!forum/ccio"
 
 	login_to_google
 	login_to_discourse
@@ -7,7 +7,7 @@ def go
 	link_to_next_page = root_group_page
 
 	while link_to_next_page
-		
+
 		topic_links, link_to_next_page = get_index_page root_group_page
 
 		topic_links.each do |topic_link|
@@ -22,7 +22,10 @@ def go
 end
 
 def login_to_google
+	group_signin_url = "https://accounts.google.com/ServiceLogin?continue=https%3A%2F%2Fgroups.google.com%2Fd%2Fforum%2Fccio&hl=en-GB&service=groups2&passive=true"
 
+	user = ENV['GOOGLE_USER']
+	password = ENV['GOOGLE_PASSWORD']
 end
 
 def login_to_discourse
