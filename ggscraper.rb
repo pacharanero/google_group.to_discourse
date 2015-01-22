@@ -84,28 +84,15 @@ class Ggscraper
     # Would be useful to detect the <current_number> of <total_topics> or even human enter the number as part of the initiation.
     # It seems that google groups initial load is 30 threads. 
     sleep(6) #wait for it to load
+
     #topics = driver.find_elements(:class, 'GFP-UI5CPO')
     topics = @driver.find_elements(:tag_name, 'a')
-    puts "#{topics.count} total topics found."
-
-    found_last_link = false #Add welcome message
+    puts "#{topics.count} total topics found."    
 
     topics.each do |topic|
-      #if topic.attribute(:href).startsWith("#!topic/") # it is a topic. 
-      #TODO-put in above, as this will mean no need to parse out blanks
-      if topic.text.nil? or topic.text==""
-        puts "blank topic"
-      else
-        puts "#{topic.text}"
-        
-        if found_last_link
-          populated_topics << topic
-        end
-        
-        if topic.text == "Add welcome message"
-          found_last_link = true
-        end
-
+      if !topic.nil? and !topic.attribute(:href).nil? and topic.attribute(:href).include? "#!topic/" # it is a topic.
+        puts "#{topic.text}"                
+        populated_topics << topic                    
       end
     end
 
