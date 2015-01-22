@@ -2,17 +2,16 @@ require 'selenium-webdriver'
 require 'discourse_api'
 
 class Ggscraper
+  attr_reader :driver
 
   def initialize
-    if ENV['GOOGLE_USER'].nil? or ENV['GOOGLE_PASSWORD'].nil? or ENV['GOOGLE_GROUP_URL'].nil? 
-      puts "You need to setup these environment variables: GOOGLE_USER, GOOGLE_PASSWORD and GOOGLE_GROUP_URL"
+    if ENV['GOOGLE_USER'].nil? or ENV['GOOGLE_PASSWORD'].nil? or ENV['GOOGLE_GROUP_URL'].nil? or ENV['DISCOURSE_ADDRESS'].nil? or ENV['DISCOURSE_API_KEY'].nil? or ENV['DISCOURSE_API_USER'].nil?
+      puts "You need to setup these environment variables: GOOGLE_USER, GOOGLE_PASSWORD and GOOGLE_GROUP_URL. DISCOURSE_ADDRESS, DISCOURSE_API_KEY, and DISCOURSE_API_USER"
     end
 
     @username = ENV['GOOGLE_USER']
     @password = ENV['GOOGLE_PASSWORD']
-    @ccio_url = ENV['GOOGLE_GROUP_URL']    
-
-    @discourse_ = ENV['DISCOURSE_']
+    @ccio_url = ENV['GOOGLE_GROUP_URL']        
 
     @driver = Selenium::WebDriver.for :firefox
     @raw_driver = Selenium::WebDriver.for :firefox
@@ -104,6 +103,11 @@ class Ggscraper
     @raw_driver.navigate.to raw_url
   end
 
+  def get_thread_id_from_url
+    url = driver.current_url #"https://groups.google.com/forum/#!topic/ccio/g9qK6Zefb3w" 
+    url.split("#!topic")[1].split("/").last
+  end
+
   def connect_discourse
     @discourse_client = DiscourseApi::Client.new( ENV['DISCOURSE_ADDRESS'] )
     @discourse_client.api_key = ENV['DISCOURSE_API_KEY']
@@ -121,6 +125,11 @@ class Ggscraper
       raw: "This is the raw markdown for my post"
     )
   end
+
+  def close
+    @driver.close
+    @raw_driver.close
+  end  
 
 end #end class
 
