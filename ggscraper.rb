@@ -20,50 +20,63 @@ class Ggscraper
   end
 
   def go
-    login
     puts "Logging in to Google Group..."
 
-    #scroll to bottom of list of topics to get ALL the topics (need to make selenium do this)
+    login    
+    login @raw_driver
+    
     topics = get_topics
     puts "#{topics.count} topics found."
-
-    topics.each do |topic|
-      thread = topic.click
-      #If 3 messages in thread then, the last one will be open.
-      #Is there a common class element that identifies each message and thread.
-      #If collapsed: span id="message_snippet_<message_id>"
-      #If expanded: 'More Actions' link (under the arrow) - div id="b_action_<message_id>"
-      #thread_id, message_ids = extract(thread)
-      #message_ids.each do |message_id|
-        #raw = get_raw_message( thread_id, message_id)
-      #end
-
-      #scraper.create_discourse_topic topic.text
+    
+    topics_store = []
+    # visit all of the topics before leaving the page
+    topics.each do |topic|      
+      thread_id = get_thread_id_from_url topic.attribute(:href)
+      topic = { title: topic.text, url: topic.attribute(:href), thread_id: thread_id }
+      topics_store << topic 
     end
-    #puts topic.to_s
-  end
+    puts "#{topics_store.count} topic attributes stored"
 
-  def raw_message_test
-    login(@raw_driver)
-    get_raw_message("s2QXT_XDMhA","bMl2SEzl0oEJ")
-    # Date: Wed, 21 Jan 2015 12:20:16 +0000
-    # From: "Firstname Surname" <email@test.com>    
-    # Subject: message subject
-    #Message BODY
-    # Extract
-    #Content-Type: text/plain; charset="us-ascii"
-    #Content-Transfer-Encoding: quoted-printable
-    #UP TO
-    # -- =
-    # OR Maybe
-    # To post to this group, send email to ccio@googlegroups.com.
-  end
+    # Visit and migrate each of the threads in turn.
+    topics_store.each do |topic|      
+      puts "thread id: #{topic[:thread_id]} for topic: #{topic[:title]}"
+      puts "url: #{topic[:url]}"
+
+      driver.navigate.to topic[:url]
+      sleep(1)
+
+      #If 3 messages in thread then, the last one will be open.
+        #If collapsed: span id="message_snippet_<message_id>"  
+        #If expanded: 'More Actions' link (under the arrow) - div id="b_action_<message_id>"
+      #minimized_messages = nil #need to find these and open by clicking on them      
+      expanded_messages = driver.find_elements(:xpath, "//div[contains(@id, 'b_action_')]")
+      
+      if expanded_messages.count == 0
+        puts "****ERROR: NO EXPANDED MESSAGES at url: #{topic[:url]}"
+      else
+        puts "we have #{expanded_messages.count} expanded messages"
+        #expanded_messages.each do |message|
+          #raw = get_raw_message( thread_id, message_id)
+        #end
+        message_id = expanded_messages.first.attribute(:id).split("_").last
+
+        puts "getting raw, for thread_id: #{topic[:thread_id]}, message_id: #{message_id}"      
+        raw_email = get_raw_message( topic[:thread_id], message_id )      
+      end  
+
+      puts "about to create discourse topic #{topic[:title]}"
+      create_discourse_topic topic[:title]
+    end #end topics iteration
+    
+    close_browsers
+
+    topics_store.to_json
+  end  
 
   def login(driver=@driver)
-    sleep(2) 
     puts "Loading #{@ccio_url} for user #{@username}"
     driver.navigate.to @ccio_url
-
+    sleep(2) 
     #find the right elements
     username_field = driver.find_element(:id, 'Email')
     password_field = driver.find_element(:id, 'Passwd')
@@ -82,12 +95,13 @@ class Ggscraper
     #TODO-the scroll to last needs repeating until there is no more messages.
     # Would be useful to detect the <current_number> of <total_topics> or even human enter the number as part of the initiation.
     # It seems that google groups initial load is 30 threads. 
-    sleep(6) #wait for it to load
-
-    #topics = driver.find_elements(:class, 'GFP-UI5CPO')
+    
+    sleep(4) #wait for it to load
+    
     topics = @driver.find_elements(:tag_name, 'a')
     puts "#{topics.count} total topics found."    
 
+    # We only want the links that include "#!topic/"
     topics.each do |topic|
       if !topic.nil? and !topic.attribute(:href).nil? and topic.attribute(:href).include? "#!topic/" # it is a topic.
         puts "#{topic.text}"                
@@ -100,12 +114,18 @@ class Ggscraper
 
   def get_raw_message( thread_id, message_id )
     raw_url = "https://groups.google.com/forum/message/raw?msg=ccio/#{thread_id}/#{message_id}"
+    
     @raw_driver.navigate.to raw_url
+    #TODO: Check for 400 error here. Seems about 1 in 20 or so is generating a bad request.
+    puts "raw: #{@raw_driver.page_source}"
+
+    @raw_driver.page_source
   end
 
-  def get_thread_id_from_url
-    url = driver.current_url #"https://groups.google.com/forum/#!topic/ccio/g9qK6Zefb3w" 
-    url.split("#!topic")[1].split("/").last
+  def get_thread_id_from_url( thread_url )
+    #Format: "https://groups.google.com/forum/#!topic/ccio/g9qK6Zefb3w" 
+
+    thread_url.split("#!topic")[1].split("/").last
   end
 
   def connect_discourse
@@ -126,7 +146,7 @@ class Ggscraper
     )
   end
 
-  def close
+  def close_browsers
     @driver.close
     @raw_driver.close
   end  
