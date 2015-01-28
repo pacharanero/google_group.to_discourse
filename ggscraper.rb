@@ -20,6 +20,76 @@ class Ggscraper
     @discourse_client = nil
   end
 
+
+  def one_whole_topic( topics_store , index)
+    topic = topics_store[index-1] #sets topic[:title], topic[:url], topic[:thread_id]
+
+    #navigate to topic
+    driver.navigate.to topic[:url]
+    sleep (3) #wait for it to load
+
+    #expand all the message_snippets
+    minimized_messages = driver.find_elements(:xpath, "//span[contains(@id, 'message_snippet_')]")
+    minimized_messages.each { |link| link.click }
+
+    #get all messages (they are all expanded)
+    expanded_messages = driver.find_elements(:xpath, "//div[contains(@id, 'b_action_')]")
+    all_messages = expanded_messages #they are all expanded now so expanded_messages is same as all_messages
+    puts "we have #{all_messages.count} expanded messages"
+
+    #iterate through messages
+    first_message = true 
+    discourse_topic_id = nil
+
+    all_messages.each do |message|
+      message_id = message.attribute(:id).slice(-12, 12)
+
+      puts "getting raw, for thread_id: #{topic[:thread_id]}, message_id: #{message_id}"      
+      raw_email = get_raw_message( topic[:thread_id], message_id )     
+      email = Mail.new raw_email
+      puts "We have email: date: #{email.date}, from #{email.from}, subject: #{email.subject}"
+
+      if first_message
+        first_message = false
+        puts "First message so need to create thread. About to create discourse topic #{topic[:title]}"
+
+        topic_parameters = create_discourse_topic( topic, email )
+        if topic_parameters
+          puts "Created topic: #{topic_parameters["topic_id"]}"
+          discourse_topic_id = topic_parameters["topic_id"]
+        else
+          puts "ERROR: Topic was NOT created on discourse - #{topic[:url]}"
+        end
+
+      else
+        puts "This should be posted to existing thread"
+        post_parameters = create_discourse_topic_post(discourse_topic_id, email)
+        puts "Post created on discourse - post id: #{post_parameters["id"]}"
+      end
+
+    end
+
+  end  
+
+
+  def build_topics_store
+    login    
+    login @raw_driver
+    topics = get_topics
+    puts "#{topics.count} topics found."
+
+    topics_store = []
+    # visit all of the topics before leaving the page
+    topics.each do |topic|      
+      thread_id = get_thread_id_from_url topic.attribute(:href)
+      topic = { title: topic.text, url: topic.attribute(:href), thread_id: thread_id }
+      topics_store << topic 
+    end
+    puts "#{topics_store.count} topic attributes stored"
+
+    topics_store
+  end
+
   def go
     puts "Logging in to Google Group..."
 
@@ -208,7 +278,7 @@ class Ggscraper
     begin      
       post_parameters = @discourse_client.create_post(
         topic_id: "#{topic_id}",                
-        raw: "This is a raw body from code."
+        raw: "Imported reply. Sender:#{email.from}. Date:#{email.date}. Message: #{email.text_part}"
       )
       #raw: "Imported reply. Sender:#{email.from}. Date:#{email.date}. Message: #{email.text_part}"
     rescue  
