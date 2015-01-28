@@ -1,12 +1,13 @@
 require 'selenium-webdriver'
 require 'discourse_api'
+require 'mail'
 
 class Ggscraper
-  attr_reader :driver
+  attr_reader :driver, :raw_driver, :discourse_client
 
   def initialize
-    if ENV['GOOGLE_USER'].nil? or ENV['GOOGLE_PASSWORD'].nil? or ENV['GOOGLE_GROUP_URL'].nil? or ENV['DISCOURSE_ADDRESS'].nil? or ENV['DISCOURSE_API_KEY'].nil? or ENV['DISCOURSE_API_USER'].nil?
-      puts "You need to setup these environment variables: GOOGLE_USER, GOOGLE_PASSWORD and GOOGLE_GROUP_URL. DISCOURSE_ADDRESS, DISCOURSE_API_KEY, and DISCOURSE_API_USER"
+    if ENV['GOOGLE_USER'].nil? or ENV['GOOGLE_PASSWORD'].nil? or ENV['GOOGLE_GROUP_URL'].nil? or ENV['DISCOURSE_ADDRESS'].nil? or ENV['DISCOURSE_API_KEY'].nil? or ENV['DISCOURSE_API_USER'].nil? or ENV['DISCOURSE_API_USER'].nil? or ENV['DISCOURSE_CATEGORY'].nil?
+      puts "You need to setup these environment variables: GOOGLE_USER, GOOGLE_PASSWORD and GOOGLE_GROUP_URL. DISCOURSE_ADDRESS, DISCOURSE_API_KEY, DISCOURSE_API_USER and DISCOURSE_CATEGORY"
     end
 
     @username = ENV['GOOGLE_USER']
@@ -44,28 +45,57 @@ class Ggscraper
 
       driver.navigate.to topic[:url]
       sleep(1)
+      #open_each_message_snippet topic[:url] #Issues with dom not being in view, solved with minimized messages below      
 
       #If 3 messages in thread then, the last one will be open.
         #If collapsed: span id="message_snippet_<message_id>"  
         #If expanded: 'More Actions' link (under the arrow) - div id="b_action_<message_id>"
       #minimized_messages = nil #need to find these and open by clicking on them      
+      minimized_messages = driver.find_elements(:xpath, "//span[contains(@id, 'message_snippet_')]")
       expanded_messages = driver.find_elements(:xpath, "//div[contains(@id, 'b_action_')]")
       
-      if expanded_messages.count == 0
-        puts "****ERROR: NO EXPANDED MESSAGES at url: #{topic[:url]}"
-      else
-        puts "we have #{expanded_messages.count} expanded messages"
-        #expanded_messages.each do |message|
-          #raw = get_raw_message( thread_id, message_id)
-        #end
-        message_id = expanded_messages.first.attribute(:id).split("_").last
+      all_messages = expanded_messages.concat minimized_messages
+      
+      if minimized_messages.count + expanded_messages.count == all_messages
+      end 
 
-        puts "getting raw, for thread_id: #{topic[:thread_id]}, message_id: #{message_id}"      
-        raw_email = get_raw_message( topic[:thread_id], message_id )      
+      if all_messages.count == 0
+        puts "****ERROR: NO MESSAGES at url: #{topic[:url]}"
+      else
+        puts "we have #{all_messages.count} expanded messages"
+        first_message = true 
+        discourse_topic_id = nil
+
+        all_messages.each do |message|
+          message_id = expanded_messages.first.attribute(:id).split("_").last
+
+          puts "getting raw, for thread_id: #{topic[:thread_id]}, message_id: #{message_id}"      
+          raw_email = get_raw_message( topic[:thread_id], message_id )     
+          email = Mail.new raw_email
+          puts "We have email: date: #{email.date}, from #{email.from}, subject: #{email.subject}"
+
+          if first_message
+            first_message = false
+            puts "First message so need to create thread. About to create discourse topic #{topic[:title]}"
+
+            topic_parameters = create_discourse_topic( topic, email )
+            if topic_parameters
+              puts "Created topic: #{topic_parameters["topic_id"]}"
+              discourse_topic_id = topic_parameters["topic_id"]
+            else
+              puts "ERROR: Topic was NOT creasted on discourse - #{topic[:url]}"
+            end
+
+          else
+            puts "This should be posted to existing thread"
+            post_parameters = create_discourse_topic_post(discourse_topic_id, email)
+            puts "Post created on discourse - post id: #{post_parameters["id"]}"
+          end
+
+        end
+        
       end  
 
-      puts "about to create discourse topic #{topic[:title]}"
-      create_discourse_topic topic[:title]
     end #end topics iteration
     
     close_browsers
@@ -91,12 +121,14 @@ class Ggscraper
   def get_topics
     populated_topics = []
 
-    @driver.find_elements(:tag_name, 'a').last.location_once_scrolled_into_view #scroll to last topic
-    #TODO-the scroll to last needs repeating until there is no more messages.
-    # Would be useful to detect the <current_number> of <total_topics> or even human enter the number as part of the initiation.
-    # It seems that google groups initial load is 30 threads. 
-    
-    sleep(4) #wait for it to load
+    # It seems that google groups initial load is 30 threads.       
+    puts "Scroll down to the bottom of the Group in the Selenium window (yes, manually!)"
+    #user scrolls down MANUALLY then get topics
+    sleep(20)
+    puts "5 seconds left to finish scrolling"
+    sleep(5)
+
+    #@driver.find_elements(:tag_name, 'a').last.location_once_scrolled_into_view #scroll to last topic. Preferable, but doesn't work.            
     
     topics = @driver.find_elements(:tag_name, 'a')
     puts "#{topics.count} total topics found."    
@@ -110,6 +142,17 @@ class Ggscraper
     end
 
     populated_topics
+  end
+
+  def open_each_message_snippet(topic_url)
+    # Only useable if all of the messages are within 
+    @driver.navigate.to topic_url
+    snippets = @driver.find_elements(:class, 'GFP-UI5CCLB') #finds the message-snippets
+
+    snippets.each do |snippet|
+      snippet.location_once_scrolled_into_view
+      snippet.click
+    end
   end
 
   def get_raw_message( thread_id, message_id )
@@ -134,16 +177,45 @@ class Ggscraper
     @discourse_client.api_username = ENV['DISCOURSE_API_USER'] 
   end
 
-  def create_discourse_topic( topic )
-    connect_discourse if @discourse_client.nil? 
 
-    @discourse_client.create_topic(
-      category: "Help",
-      skip_validations: true,
-      auto_track: false,
-      title: "#{topic}",
-      raw: "This is the raw markdown for my post"
-    )
+  def create_discourse_topic( topic, email=nil )
+    connect_discourse if @discourse_client.nil? 
+    
+    topic_parameters = nil
+
+    begin      
+      topic_parameters = @discourse_client.create_topic(
+        category: "#{ENV['DISCOURSE_CATEGORY']}",
+        skip_validations: true,
+        auto_track: false,
+        title: "#{topic[:title]}",
+        raw: "Imported message. 
+          Sender:#{email.from}. Date:#{email.date}.
+          Message: #{email.text_part}"
+      )
+    rescue  
+      puts "***create_discourse_topic EXCEPTION: #{topic[:url]}"
+    end
+
+    topic_parameters
+  end
+
+  def create_discourse_topic_post( topic_id, email )
+    connect_discourse if @discourse_client.nil? 
+    
+    post_parameters = nil
+    puts "topic_id: #{topic_id.to_s}, Sender:#{email.from}. Date:#{email.date}. Message: #{email.text_part}"
+    begin      
+      post_parameters = @discourse_client.create_post(
+        topic_id: "#{topic_id}",                
+        raw: "This is a raw body from code."
+      )
+      #raw: "Imported reply. Sender:#{email.from}. Date:#{email.date}. Message: #{email.text_part}"
+    rescue  
+      puts "***create_discourse_topic_post EXCEPTION: #{topic_id}"
+    end
+
+    post_parameters
   end
 
   def close_browsers
