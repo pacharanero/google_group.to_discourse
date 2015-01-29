@@ -1,6 +1,8 @@
 require 'selenium-webdriver'
 require 'discourse_api'
 require 'mail'
+require 'nokogiri'
+require 'cgi'
 
 class Ggscraper
   attr_reader :driver, :raw_driver, :discourse_client
@@ -232,7 +234,7 @@ class Ggscraper
     #TODO: Check for 400 error here. Seems about 1 in 20 or so is generating a bad request.
     puts "raw: #{@raw_driver.page_source}"
 
-    @raw_driver.page_source
+    return Nokogiri::HTML(CGI.unescapeHTML(@raw_driver.page_source)).content
   end
 
   def get_thread_id_from_url( thread_url )
@@ -250,24 +252,17 @@ class Ggscraper
 
   def create_discourse_topic( topic, email=nil )
     connect_discourse if @discourse_client.nil? 
-    
     topic_parameters = nil
-
-    begin      
-      topic_parameters = @discourse_client.create_topic(
+        topic_parameters = @discourse_client.create_topic(
         category: "#{ENV['DISCOURSE_CATEGORY']}",
         skip_validations: true,
         auto_track: false,
         title: "#{topic[:title]}",
-        raw: "Imported message. 
+        raw: "Imported message. Original thread at: #{topic[:url]}
           Sender:#{email.from}. Date:#{email.date}.
           Message: #{email.text_part}"
       )
-    rescue  
-      puts "***create_discourse_topic EXCEPTION: #{topic[:url]}"
-    end
-
-    topic_parameters
+    return topic_parameters
   end
 
   def create_discourse_topic_post( topic_id, email )
@@ -275,15 +270,14 @@ class Ggscraper
     
     post_parameters = nil
     puts "topic_id: #{topic_id.to_s}, Sender:#{email.from}. Date:#{email.date}. Message: #{email.text_part}"
-    begin      
+          
       post_parameters = @discourse_client.create_post(
         topic_id: "#{topic_id}",                
         raw: "Imported reply. Sender:#{email.from}. Date:#{email.date}. Message: #{email.text_part}"
       )
-      #raw: "Imported reply. Sender:#{email.from}. Date:#{email.date}. Message: #{email.text_part}"
-    rescue  
+     
       puts "***create_discourse_topic_post EXCEPTION: #{topic_id}"
-    end
+    
 
     post_parameters
   end
