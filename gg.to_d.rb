@@ -6,12 +6,8 @@ require 'json'
 require 'discourse_api'
 
 
-class GoogleGroupsScrapetoJSON
-  attr_reader :driver, :raw_driver
-
-  @discourse_client = nil
-
-
+class GoogleGroupToDiscourse
+  attr_reader :driver
 
   # set up variables from the env file
   def initialize
@@ -27,7 +23,11 @@ class GoogleGroupsScrapetoJSON
 
     # initialize a driver to look up DOM information and another for scraping raw email information
   	@driver = Selenium::WebDriver.for :firefox
-    login @driver   
+    login @driver
+
+    #initialize Discourse Client
+    @discourse_client = nil
+
   end
 
   # log in to google group
