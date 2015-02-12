@@ -56,7 +56,7 @@ irb 002 > my_scraper = GoogleGroupToDiscourse.new
 1. If you have problems at any stage look in the 'Known Issues' section to see if it is a new problem or one we know about, and maybe find a solution
 1. Reinstate normal rate limits on Discourse
 1. consider Flattring (by Favouriting the repo)
-1. Or: donate to our community hackspace project, @Leigh_Hackspace www.leighhack.org using this PayPal link: [https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=ERQZWWL7HARHY]
+1. Or: donate to our community hackspace project, @Leigh_Hackspace www.leighhack.org using this PayPal link: https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=ERQZWWL7HARHY
 
 ##Notes/Alternative Usage
 * If you look at the source, there are a couple of other methods that might be of help, some of which are even working ;-)
@@ -74,7 +74,7 @@ irb 002 > my_scraper = GoogleGroupToDiscourse.new
 
 ##New issues and contributions
 Please log issues in GitHub. Pull requests are welcome.
-Contact me on [marcusbaw@gmail.com]
+Contact me on marcusbaw@gmail.com
 
 ##Roadmap
 * command line usage
