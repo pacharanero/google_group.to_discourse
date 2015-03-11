@@ -6,7 +6,7 @@ require 'json'
 require 'discourse_api'
 
 
-class GoogleGroupToDiscourse
+class GoogleGroupToDiscourse  
   attr_reader :driver
 
   # set up variables from the env file
@@ -94,13 +94,14 @@ class GoogleGroupToDiscourse
 
   def scrape_the_lot
     topics = get_topics
-    topics.each do |topic|
+    topics.reverse_each do |topic|
       messages = get_messages( topic )
       # this would be where to insert any cruft-removal code
       send_to_discourse( messages )
-      puts "All topics migrated to Discourse"
-      close_browsers
     end
+    puts "All topics migrated to Discourse"
+    @driver.close
+  end
 
   def save_all_topics_json(start_at_topic_number=0)
     topics = get_topics
@@ -191,14 +192,13 @@ class GoogleGroupToDiscourse
 
   def close_browsers
     @driver.close
-    @raw_driver.close
   end
 
   #helps with bulk deletion of Discourse topics - useful when you've been experimenting with a google group scrape
 
   def bulk_delete(user=ENV['DISCOURSE_API_USER'])
     connect_discourse if @discourse_client.nil?
-    topics_for_deletion = @discourse_client.topics_by(user) #gets the first 30 topics - this is Discourse's API default
+    topics_for_deletion = @discourse_client.topics_by(user) #gets the first 30 topics - this is Discourse's API limit it seems
     topics_for_deletion.each { |id| @discourse_client.delete_topic(id["id"]) }
     puts "#{topics_for_deletion.count} posts deleted"
   end  
