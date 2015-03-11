@@ -1,6 +1,6 @@
 env.sh
-live-env.sh
-dev-env.sh
+live_env.sh
+dev_env.sh
 discourse/
 *.gem
 *.rbc
