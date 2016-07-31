@@ -1,5 +1,8 @@
 ##Google Groups to Discourse migration
 
+#IMPORTANT UPDATE:
+**This method of scraping Google Group content to Discourse has been superseded by other import scripts. Please see [this thread](https://meta.discourse.org/t/migration-of-google-groups-to-discourse/48012) on Discourse Meta for the latest information.**
+
 Migrating away from a private Google Group is not easy. It would seem to be made deliberately so by Google.
 
 1. there is no API
