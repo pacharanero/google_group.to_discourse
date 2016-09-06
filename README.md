@@ -1,88 +1,64 @@
-##Google Groups to Discourse migration
+# gg.to_d
 
-#IMPORTANT UPDATE:
-**This method of scraping Google Group content to Discourse has been superseded by other import scripts. Please see [this thread](https://meta.discourse.org/t/migration-of-google-groups-to-discourse/48012) on Discourse Meta for the latest information.**
+Here is a 'working prototype' of a google group migration script that attempts to be more 'all-in-one' and reduce the number of steps, complexity and difficulty of doing google group imports.
 
-###This code now deprecated, unmaintained, here for information only
-Migrating away from a private Google Group is not easy. It would seem to be made deliberately so by Google.
+Having finally gotten around to doing a pro-bono google group import I promised to do for the wonderful [Valentina Project](http://valentina-project.org/), I had to re-familiarise myself with the available google group scraping tools, as suggested to me by @erlend_sh from the Discourse Team, who pointed me in the direction of a few google group scraping libraries and Discourse's own mbox importer script. So while it's all in my head I thought I'd have a go at a more user-friendly import script, and some documentation for it.
 
-1. there is no API
-2. there is no API
-3. the entire content is rendered in-browser from JS so HTML requesting tools such as the Ruby Mechanize gem don't work (you can log in but you can't see any content)
-4. the HTML tags are (it seems deliberately) obfuscated - they are meaningless in English so it's hard to work out what CSS selectors to go for when scraping the page
-5. I'm told there are Captchas if you go over a certain rate limit for page requests (although I didn't encounter this problem)
+Thanks to @steinwaywhw at Discourse Meta for his work, both in https://meta.discourse.org/t/how-to-import-google-groups-to-discourse/47074/2 and in https://meta.discourse.org/t/an-importer-for-google-groups/45624, without which I wouldn't have been able to do this.
 
-Discourse was the easy bit, because it has a comprehensive read/write API: https://github.com/discourse/discourse_api
+#Notes
+* I think I may have solved the [problem](https://meta.discourse.org/t/an-importer-for-google-groups/45624/7) of email addresses being redacted by Google Groups, (it doesn't happen if you are logged into Google Groups with a 'Manager' level account) so that now, the `mbox.rb` importer can create users in Discourse with the correct email addresses. The rightful owners of those created users would then only need to do a password reset in order to be able to log into their new user on Discourse, and all their Google Group posts would be correctly assigned to them. I've tested this on a real migration, it works, and I'm keen to get feedback from other testers.
+* I've tried to use the OO design pattern established in the other import scripts, for example `ImportScripts::Mbox` subclasses `ImportScripts::Base`. In my case, I wanted to use a lot of functionality from `ImportScripts::Mbox`, so my script is a subclass of `ImportScripts::Mbox`.
+* It works.... but it's definitely not finished yet and I'd appreciate constructive criticism, pull requests and amusing emoji.
 
-##Scraper/Import Tool gg.to_d.rb
-gg.to_d.rb uses Ruby Selenium to automate a Firefox browser which navigates to the Google Group, logs in, and scrapes all the topics from the front page. It then iterates through these to collect all the data from each Topic into a hash, which it then uses to create a topic on Discourse and append all subsequent posts to that topic.
+#How to use it
 
-## Dependencies
-* Firefox
-* Selenium
+You will need to be a little bit familiar with the Linux command line, SSH and stuff like that. I've tried to make the step-by-step instructions as clear as possible, but there might be slight variations in the output of certain commands. Please reply to the [Discourse Meta thread](https://meta.discourse.org/t/migration-of-google-groups-to-discourse/48012) or create a GitHub Issue if you are having problems.
 
-##How To Use
-1. I suggest using a dev/testing instance of Discourse rather tan your production/live instance, at least while you're getting things figured out.
-1. Set up a user for the Google Group you want to scrape and obtain login credentials for that user.
-1. Set up a user for the Discourse group who has sufficient privileges to post without restriction (in practice just make them an Admin). All scraped posts will be posted by this user, although a header will be inserted so that the original author of the post on the Google Group is clear.
-1. Create an API key for the Discourse User (done in <http://yourdiscoursedomain>/admin/users/<username> ).
-1. Create a suitable Category in Discourse for the scraped content to go into.
-1. Temporarily remove rate limiting for posts on Discourse (done in <http://yourdiscoursedomain>/admin/site_settings/category/rate_limits ).
-1. edit env.sh.template to contain the correct credentials for the above users, the URL of the Google Group and the Discourse instance:
+1. **Cookies**. In order to be able to extract users' email addresses correctly from the Google Group, you will need to have **Manager** access to the Google Group. Having logged into Google Groups (on your normal computer) with this Manager account, export the Google  cookies from your browser. (I used the [cookies.txt](https://chrome.google.com/webstore/detail/cookiestxt/njabckikapfpffapmjgojcnbfjonfjfg) Chrome extension to get the cookies.txt file (Without this step, the scrape **will** still work BUT the email addresses are truncated/redacted by Google Groups so they look like this: `marcu....@gmail.com`, and of course this messes up creation of new users on Discourse)
 
-```bash
-export GOOGLE_USER=""               # Google Group username 
-export GOOGLE_PASSWORD=""           # Google Group user's password
-export GOOGLE_GROUP_URL=""          # URL to Google **with redirect to the Google Group appended**
-                                    # get this by trying to navigate to the Google Group
-                                    # when you are logged out - you will be taken to the login page, but the 
-                                    # URL in the address bar will contain the redirect URL as well. C&P this.
-export DISCOURSE_ADDRESS=""         # URL of the Discourse server
-export DISCOURSE_API_KEY=""         # API key for the Discourse scraper user
-export DISCOURSE_API_USER=""        # Username or the Discourse scraper user
-export DISCOURSE_CATEGORY=""        # Category that scraped content will go into
+1. **Upload cookies.txt.** Once you have the cookies.txt file, the easiest way to get it into your Docker container from your computer is to **upload it as an attachment to any post in your discourse forum**. (The alternative way requires messing about with both `scp` and then `docker cp`, but is of course fine as well) You will need the file path for the next step, you can get  the URL from the post, it will be something like: `/uploads/default/original/1X/245aa0cdc6847cf59647e1c7102e253e99d40b69.txt`
 
-```
-1. Rename the file env.sh (or whatever_you_like.sh)
-1. Open a terminal (oh yeah, if you're on Windows, er... sorry?)
-1. run `$ source env.sh`
-1. run irb
-```
-irb 001 > load 'gg.to_d.rb
-irb 002 > my_scraper = GoogleGroupToDiscourse.new
-```
-1. A Selenium browser window (Firefox) will appear, and it should navigate to the login page of your Google Group, enter your credentials, and login.
-1. In irb, type 'my_scraper.scrape_the_lot'
-1. The program will ask you to scroll down the page in the Selenium browser until you reach the bottom. This is to ensure that all topics are scraped. It's very hacky but so far the only reliable way (see Known Issues)
-1. You will get a list of every topic in your Google Group scrolling in the terminal
-1. It will then start iterating through these and uploading to Discourse with progress reports
-1. Log into Discourse and watch it happening, while the Selenium window does it's eerie thing, and the command line scrolls pleasingly.
-1. If you have problems at any stage look in the 'Known Issues' section to see if it is a new problem or one we know about, and maybe find a solution
-1. Reinstate normal rate limits on Discourse
-1. consider Flattring (by Favouriting the repo)
-1. Or: donate to our community hackspace project, @Leigh_Hackspace www.leighhack.org using this PayPal link: https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=ERQZWWL7HARHY
+1. **SSH into your server**
+`user@my-laptop ~ $ ssh user@your-discourse-server`
 
-##Notes/Alternative Usage
-* If you look at the source, there are a couple of other methods that might be of help, some of which are even working ;-)
-* You can break down the process of the scrape into the separate sections:
-  * `topics = my_scraper.get_topics`                            # gets all topics, their URLs, and topic_id
-  * `messages = my_scraper.get_messages (topics[ <index> ])`    # gets the messages for a particular topic
-  * `my_scraper.send_to_discourse ( messages )`                 # sends the message just scraped to Discourse
-* In particular there is a `bulk_delete(username=defaultuser)` method, for when you have been playing with scraping and it's all gone wrong
+1. **Change directory into the Discourse directory**
+`user@your-discourse-server ~ $ cd /var/discourse`
 
-##Known Issues/Imperfections
-1. And most glaring during scraping - I still haven't worked out a way to scroll to the bottom of the Google Group page in Selenium - various approaches were tried but since the links below the bottom of the page don't actually *exist* (aren't yet rendered) until you scroll down, you can't reference them in Selenium in order to make it scroll down. And there don't seem to be any direct controls for scrolling.
-1. Users and posting dates of the google group are not replicated in Discourse posting. All posts are made by a single Discourse user, although a header is inserted containing the name of the user that posted and the date of the original posting, as well as a link to the original thread on Google Groups
-1. `Selenium::WebDriver::Error::StaleElementReferenceError: Element is no longer attached to the DOM` - sometimes, for reasons not clear to me, the DOM either changes or something happens to Selenium's binding of DOM to Ruby Object, and it can't find stuff. Retrying, starting from that Topic seems to work, presumably the DOM is in some way refreshed. On my roadmap is to trap this error and auto-retry with a backoff and limit.
-1. Email Cruft. \#GIGO. If there are loads of email signatures and other crap in the emails as they are on Google Groups, then this cruft will also be imported into Discourse.
+1. **Enter the Discourse Docker container**, using ./launcher tool.
+`user@your-discourse-server /var/discourse $ ./launcher enter app`
 
-##New issues and contributions
-Please log issues in GitHub. Pull requests are welcome.
-Contact me on marcusbaw@gmail.com
+1. **Copy cookies.txt to `/tmp/`** so that the import script can find it. Prepend `/var/www/discourse/public` to the URL from the previous step, this gives you the full file path, to use with the `cp` (unix copy) command:
+`root@your-container ~ # cp '/var/www/discourse/public/uploads/default/original/1X/245aa......40b69.txt /tmp/`
 
-##Roadmap
-* command line usage
-* scrape a Range of topics (eg from topic 11..45)
-* trap 'Selenium - Element is no longer attached to the DOM' error and auto-retry with backoff and limit
-* cruft auto-remove (regex scanning and deletion)
-* scrape list of Google Group users, create these users on Discourse, and map posts across to the correct user on upload (non-trivial but I am open to paying customers who want this)
+1. **Install some stuff** that's needed by `mbox.rb`, the importer script, for its index
+`root@your-container ~ # apt install sqlite3 libsqlite3-dev`
+`root@your-container ~ # gem install sqlite3`
+
+1. **Change into the import scripts directory** with the `cd` command.
+`root@your-container ~ # cd /var/www/discourse/script/import_scripts`
+
+1. **Get the google group script**
+`root@your-container /var/www/discourse/script/import_scripts # git clone https://github.com/pacharanero/google_group.to_discourse.git`
+
+1. **Move the downloaded script (and the altered version of mbox.rb it depends upon) into the current directory**
+`mv google_group.to_discourse/* .`
+
+1. **Change user** to the `discourse` user so that you can make changes to the database
+`# su discourse`
+
+1. **Run the script!**
+`# ruby googlegroups.rb` _`name-of-your-google-group`_
+
+
+##License
+* GPLv3 License, same as Discourse itself.
+* I'm happy to contribute the code to the main Discourse repo, however because I had to change mbox.rb in order to make it work, and other import scripts depend on mbox.rb, I haven't submitted a PR.
+
+##Contributing
+* Fork the repo to your own GitHub account
+* Make changes
+* Submit a PR explaining the reason for the changes and why I should include them
+
+
+Marcus
