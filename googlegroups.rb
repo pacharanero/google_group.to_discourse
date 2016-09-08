@@ -31,6 +31,8 @@ $ ./launcher enter app
 # su discourse
 # ruby googlegroups.rb <name-of-your-google-group-goes-here>
 
+# if these instructions don't work please see the README.md of the originating repo
+
 =end
 
 class ImportScripts::GoogleGroups < ImportScripts::Mbox
@@ -81,9 +83,8 @@ class ImportScripts::GoogleGroups < ImportScripts::Mbox
     Dir.chdir "/tmp/google-group-crawler/#{@google_group_name}" do
       FileUtils.mv('mbox','messages')
     end
-    # system 'su discourse'
-    # system 'RAILS_ENV=development ruby ./mbox.rb'
-    # import is now enacted by invocation of ImportScripts::Mbox#execute
+
+    # import is then enacted by invocation of ImportScripts::Mbox#execute
   end
 end
 
