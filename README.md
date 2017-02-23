@@ -1,5 +1,12 @@
 # gg.to_d
 
+##IMPORTANT
+* This repo currently only works with Discourse v1.7.2. To work with latest Discourse, it needs refactoring to take account of some improvements in Discourse's import script library. I **will** update it as soon as I can find time, however I'm not anticipating this to be in the immediate future due to other commitments.
+* I'm really sorry, but I cannot provide support for this script. By all means use it, fork it, tweak it, add some tests :-) etc.
+* If you wish to engage my services in migrating your Google Group to Discourse then I may be able to help, please contact me via [Discourse Meta](https://meta.discourse.org/c/marketplace) (I'm 'pacharanero' on there). Paying for my time will accelerate improvements to this open source script, for the benefit of all. My current 'production' version will always be free and open source and in a **public** repo, (most likely this one).
+
+-------
+
 Here is a 'working prototype' of a google group migration script that attempts to be more 'all-in-one' and reduce the number of steps, complexity and difficulty of doing google group imports.
 
 Having finally gotten around to doing a pro-bono google group import I promised to do for the wonderful [Valentina Project](http://valentina-project.org/), I had to re-familiarise myself with the available google group scraping tools, as suggested to me by @erlend_sh from the Discourse Team, who pointed me in the direction of a few google group scraping libraries and Discourse's own mbox importer script. So while it's all in my head I thought I'd have a go at a more user-friendly import script, and some documentation for it.
